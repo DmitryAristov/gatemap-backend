@@ -1,11 +1,14 @@
-from sqlalchemy import Column, Integer, String
+from sqlalchemy import Column, String, Float, DateTime
+from datetime import datetime, timezone
 from sqlalchemy.orm import declarative_base
-from geoalchemy2 import Geometry
 
 Base = declarative_base()
 
-class Checkpoint(Base):
-    __tablename__ = "checkpoints"
-    id = Column(Integer, primary_key=True)
-    name = Column(String, nullable=False)
-    geom = Column(Geometry("POINT", srid=4326), nullable=False)
+class LocationEntry(Base):
+    __tablename__ = "location_entries"
+
+    id = Column(String, primary_key=True)
+    device_id = Column(String, nullable=False)
+    latitude = Column(Float, nullable=False)
+    longitude = Column(Float, nullable=False)
+    timestamp = Column(DateTime, default=datetime.now(timezone.utc))

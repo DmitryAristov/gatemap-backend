@@ -1,19 +1,27 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import text
-from geoalchemy2.shape import from_shape
-from shapely.geometry import Point
-from app.db import get_db
-from app.models import Checkpoint
-from app.schemas import CheckpointCreate, CheckpointOut
+from app.db import async_session
+from sqlalchemy.ext.asyncio import AsyncSession
+from app.models import LocationEntry
+from app.schemas import LocationData
+import uuid
+from datetime import datetime, timezone
 
 router = APIRouter()
 
-@router.post("/checkpoints", response_model=CheckpointOut)
-async def add_checkpoint(data: CheckpointCreate, db: AsyncSession = Depends(get_db)):
-    point = from_shape(Point(data.longitude, data.latitude), srid=4326)
-    cp = Checkpoint(name=data.name, geom=point)
-    db.add(cp)
-    await db.commit()
-    await db.refresh(cp)
-    return cp
+@router.post("/location")
+async def save_location(data: LocationData, session: AsyncSession = Depends(async_session)):
+    new_entry = LocationEntry(
+        id=str(uuid.uuid4()),
+        device_id=data.device_id,
+        latitude=data.latitude,
+        longitude=data.longitude,
+        timestamp=datetime.now(timezone.utc)
+    )
+    session.add(new_entry)
+    await session.commit()
+    return {"status": "ok"}
+
+@router.get("/", response_model=str)
+async def get_hello_world():
+    return "Hello, world!"

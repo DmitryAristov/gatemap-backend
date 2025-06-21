@@ -5,3 +5,4 @@ asyncpg
 geoalchemy2
 psycopg[binary]
 python-dotenv
+shapely
