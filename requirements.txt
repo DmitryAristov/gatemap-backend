@@ -6,3 +6,6 @@ geoalchemy2
 psycopg[binary]
 python-dotenv
 shapely
+requests
+geopy
+scikit-learn

@@ -1,10 +1,11 @@
 from fastapi import FastAPI
 from app.routes import router
 from app.models import Base, LocationEntry
-from app.db import engine, async_session
+from app.db import engine, AsyncSessionLocal
 import asyncio
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from sqlalchemy import delete
+from app.settings import LOCATION_ENTRY_TTL, LOCATION_CLEANUP_TTL
 
 app = FastAPI()
 app.include_router(router)
@@ -18,10 +19,13 @@ async def startup():
 
 async def cleanup_old_locations():
     while True:
-        async with async_session() as session:
-            threshold = threshold = datetime.now(timezone.utc) - timedelta(days=2)
-            await session.execute(
-                delete(LocationEntry).where(LocationEntry.timestamp < threshold)
-            )
-            await session.commit()
-        await asyncio.sleep(60 * 60 * 6)
+        try:
+            async with AsyncSessionLocal() as session:
+                threshold = threshold = datetime.now(timezone.utc) - LOCATION_ENTRY_TTL
+                await session.execute(
+                    delete(LocationEntry).where(LocationEntry.timestamp < threshold)
+                )
+                await session.commit()
+        except Exception as e:
+            print(f"[CLEANUP ERROR] {e}")
+        await asyncio.sleep(LOCATION_CLEANUP_TTL)

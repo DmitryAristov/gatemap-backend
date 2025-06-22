@@ -1,8 +1,14 @@
-from sqlalchemy import Column, String, Float, DateTime
+from sqlalchemy import Column, String, Float, Integer, DateTime, ForeignKey, Enum
 from datetime import datetime, timezone
-from sqlalchemy.orm import declarative_base
+from sqlalchemy.orm import relationship, declarative_base
+import enum as py_enum
 
 Base = declarative_base()
+
+class DirectionEnum(py_enum.Enum):
+    inbound = "inbound"
+    outbound = "outbound"
+
 
 class LocationEntry(Base):
     __tablename__ = "location_entries"
@@ -12,3 +18,28 @@ class LocationEntry(Base):
     latitude = Column(Float, nullable=False)
     longitude = Column(Float, nullable=False)
     timestamp = Column(DateTime, default=datetime.now(timezone.utc))
+
+
+class Checkpoint(Base):
+    __tablename__ = "checkpoints"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    name = Column(String)
+    lat = Column(Float, nullable=False)
+    lon = Column(Float, nullable=False)
+    country_from = Column(String)
+    country_to = Column(String)
+
+    gates = relationship("Gate", back_populates="checkpoint", cascade="all, delete-orphan")
+
+
+class Gate(Base):
+    __tablename__ = "gates"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    checkpoint_id = Column(Integer, ForeignKey("checkpoints.id", ondelete="CASCADE"), nullable=False)
+    lat = Column(Float, nullable=False)
+    lon = Column(Float, nullable=False)
+    direction = Column(Enum(DirectionEnum), nullable=False)
+
+    checkpoint = relationship("Checkpoint", back_populates="gates")
