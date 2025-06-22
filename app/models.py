@@ -1,62 +1,93 @@
-from sqlalchemy import Column, String, Float, Integer, DateTime, ForeignKey, Enum
 from datetime import datetime, timezone
-from sqlalchemy.orm import relationship, declarative_base
-import enum as py_enum
+import uuid
+from sqlalchemy import (
+    Column, String, Integer, Float, DateTime, Boolean,
+    ForeignKey, UniqueConstraint
+)
+from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.orm import declarative_base, relationship
 
 Base = declarative_base()
-
-
-class DirectionEnum(py_enum.Enum):
-    inbound = "inbound"
-    outbound = "outbound"
-
-
-class LocationEntry(Base):
-    __tablename__ = "location_entries"
-
-    id = Column(String, primary_key=True)
-    device_id = Column(String, nullable=False)
-    latitude = Column(Float, nullable=False)
-    longitude = Column(Float, nullable=False)
-    timestamp = Column(DateTime, default=datetime.now(timezone.utc))
 
 
 class Checkpoint(Base):
     __tablename__ = "checkpoints"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
-    name = Column(String)
+    name = Column(String, nullable=True)
     lat = Column(Float, nullable=False)
     lon = Column(Float, nullable=False)
-    country_from = Column(String)
-    country_to = Column(String)
-    avg_wait_time_hours = Column(Float, nullable=False)
-    avg_queue_size = Column(Integer, nullable=False)
-    avg_updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)
-    
-    gates = relationship("Gate", back_populates="checkpoint", cascade="all, delete-orphan")
+    country_from = Column(String, nullable=True)
+    country_to = Column(String, nullable=True)
 
+    avg_wait_time_hours = Column(Float, nullable=False, default=0.0)
+    avg_queue_size = Column(Integer, nullable=False, default=0)
+    avg_updated_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc))
 
-class Gate(Base):
-    __tablename__ = "gates"
-
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    checkpoint_id = Column(Integer, ForeignKey("checkpoints.id", ondelete="CASCADE"), nullable=False)
-    lat = Column(Float, nullable=False)
-    lon = Column(Float, nullable=False)
-    direction = Column(Enum(DirectionEnum), nullable=False)
-
-    checkpoint = relationship("Checkpoint", back_populates="gates")
+    # Relationships
+    reports = relationship("QueueReport", back_populates="checkpoint", cascade="all, delete-orphan")
 
 
 class QueueReport(Base):
     __tablename__ = "queue_reports"
 
-    id = Column(String, primary_key=True)
-    checkpoint_id = Column(String, nullable=False)
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    checkpoint_id = Column(Integer, ForeignKey("checkpoints.id"), nullable=False)
     lat = Column(Float, nullable=False)
     lon = Column(Float, nullable=False)
     waiting_time_hours = Column(Float, nullable=False)
     throughput_vehicles_per_hour = Column(Integer, nullable=False)
     device_id = Column(String, nullable=False)
-    submitted_at = Column(DateTime, default=datetime.now(timezone.utc))
+    submitted_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc))
+
+    # Relationships
+    checkpoint = relationship("Checkpoint", back_populates="reports")
+
+
+class LocationPing(Base):
+    __tablename__ = "location_pings"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    device_id = Column(String, nullable=False)
+    lat = Column(Float, nullable=False)
+    lon = Column(Float, nullable=False)
+    timestamp = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc))
+    checkpoint_id = Column(Integer, ForeignKey("checkpoints.id"), nullable=True)
+
+
+class Feedback(Base):
+    __tablename__ = "feedback"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    message = Column(String, nullable=False)
+    tag = Column(String, nullable=False)  # 'Ошибка' / 'Идея' / 'Другое'
+    email = Column(String, nullable=True)
+    include_logs = Column(Boolean, nullable=False, default=False)
+    submitted_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc))
+
+
+class Proposal(Base):
+    __tablename__ = "proposals"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    title = Column(String, nullable=False)
+    description = Column(String, nullable=True)
+    created_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc))
+
+    votes = relationship("ProposalVote", back_populates="proposal", cascade="all, delete-orphan")
+
+
+class ProposalVote(Base):
+    __tablename__ = "proposal_votes"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    proposal_id = Column(UUID(as_uuid=True), ForeignKey("proposals.id"), nullable=False)
+    device_id = Column(String, nullable=False)
+    vote = Column(Boolean, nullable=False)  # True = за, False = против
+    voted_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc))
+
+    proposal = relationship("Proposal", back_populates="votes")
+
+    __table_args__ = (
+        UniqueConstraint('proposal_id', 'device_id', name='uix_proposal_device_vote'),
+    )

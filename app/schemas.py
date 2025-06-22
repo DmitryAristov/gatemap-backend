@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, EmailStr
 from typing import Optional
 from datetime import datetime
 
@@ -6,6 +6,7 @@ class LocationData(BaseModel):
     device_id: str = Field(..., max_length=64)
     latitude: float = Field(..., ge=-90, le=90)
     longitude: float = Field(..., ge=-180, le=180)
+    checkpoint_id: str
 
 
 class CheckpointOut(BaseModel):
@@ -30,3 +31,29 @@ class QueueReportCreate(BaseModel):
 
 class QueueReportOut(BaseModel):
     submitted_at: datetime
+
+
+class ProposalOut(BaseModel):
+    id: str
+    title: str
+    description: str | None = None
+    created_at: datetime
+    upvotes: int
+    downvotes: int
+
+
+class FeedbackCreate(BaseModel):
+    message: str
+    tag: str
+    email: EmailStr | None = None
+    include_logs: bool = False
+
+
+class ProposalVoteCreate(BaseModel):
+    device_id: str
+    vote: bool
+
+
+class ProposalVoteResult(BaseModel):
+    upvotes: int
+    downvotes: int

@@ -10,3 +10,5 @@ requests
 geopy
 scikit-learn
 pandas
+alembic
+pydantic[email]
