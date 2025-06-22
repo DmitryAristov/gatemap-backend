@@ -1,13 +1,14 @@
-from fastapi import APIRouter, Query, Depends, HTTPException, status
+from fastapi import APIRouter, Query, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy import select, insert
 from app.db import async_session
-from app.models import LocationEntry, Checkpoint
-from app.schemas import LocationData
+from app.models import LocationEntry, Checkpoint, QueueReport
+from app.schemas import LocationData, CheckpointOut, QueueReportCreate, QueueReportOut
 from datetime import datetime, timezone
 import uuid
 
 router = APIRouter()
+
 
 @router.post("/location")
 async def save_location(data: LocationData, session: AsyncSession = Depends(async_session)):
@@ -23,7 +24,7 @@ async def save_location(data: LocationData, session: AsyncSession = Depends(asyn
     return {"status": "ok"}
 
 
-@router.get("/checkpoints/")
+@router.get("/checkpoints/", response_model=list[CheckpointOut])
 async def get_checkpoints_in_bbox(
     min_lat: float = Query(..., description="Минимальная широта"),
     max_lat: float = Query(..., description="Максимальная широта"),
@@ -31,27 +32,54 @@ async def get_checkpoints_in_bbox(
     max_lon: float = Query(..., description="Максимальная долгота"),
     db: AsyncSession = Depends(async_session)
 ):
+    # Получаем КПП в bbox
     stmt = select(Checkpoint).where(
         Checkpoint.lat >= min_lat,
         Checkpoint.lat <= max_lat,
         Checkpoint.lon >= min_lon,
         Checkpoint.lon <= max_lon
     )
-
     result = await db.execute(stmt)
     checkpoints = result.scalars().all()
 
+    # Объединяем и возвращаем с полями статистики из Checkpoint
     return [
-        {
-            "id": cp.id,
-            "name": cp.name,
-            "lat": cp.lat,
-            "lon": cp.lon,
-            "country_from": cp.country_from,
-            "country_to": cp.country_to
-        }
+        CheckpointOut(
+            id=cp.id,
+            name=cp.name,
+            latitude=cp.lat,
+            longitude=cp.lon,
+            country_from=cp.country_from,
+            country_to=cp.country_to,
+            queueSize=cp.avg_queue_size,
+            waitTimeHours=cp.avg_wait_time_hours
+        )
         for cp in checkpoints
     ]
+
+
+
+@router.post("/queue_report", response_model=QueueReportOut)
+async def submit_queue_report(
+    report: QueueReportCreate,
+    session: AsyncSession = Depends(async_session)
+):
+    submitted_at = datetime.now(timezone.utc)
+    new_entry = QueueReport(
+        id=str(uuid.uuid4()),
+        checkpoint_id=report.checkpoint_id,
+        lat=report.lat,
+        lon=report.lon,
+        waiting_time_hours=report.waiting_time_hours,
+        throughput_vehicles_per_hour=report.throughput_vehicles_per_hour,
+        device_id=report.device_id,
+        submitted_at=submitted_at
+    )
+    session.add(new_entry)
+    await session.commit()
+    return QueueReportOut(
+        submitted_at=submitted_at
+    )
 
 
 @router.get("/", response_model=str)

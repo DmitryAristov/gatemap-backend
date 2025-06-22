@@ -1,31 +1,25 @@
+import asyncio
 from fastapi import FastAPI
 from app.routes import router
-from app.models import Base, LocationEntry
-from app.db import engine, AsyncSessionLocal
-import asyncio
-from datetime import datetime, timezone
-from sqlalchemy import delete
-from app.settings import LOCATION_ENTRY_TTL, LOCATION_CLEANUP_TTL
+from app.models import Base
+from app.db import engine
+from app.tasks import cleanup_old_locations, update_checkpoint_stats
+from fastapi.middleware.httpsredirect import HTTPSRedirectMiddleware
+from contextlib import asynccontextmanager
 
-app = FastAPI()
-app.include_router(router)
 
-@app.on_event("startup")
-async def startup():
+@asynccontextmanager
+async def lifespan(app: FastAPI):
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
     asyncio.create_task(cleanup_old_locations())
+    asyncio.create_task(update_checkpoint_stats())
 
+    yield
 
-async def cleanup_old_locations():
-    while True:
-        try:
-            async with AsyncSessionLocal() as session:
-                threshold = threshold = datetime.now(timezone.utc) - LOCATION_ENTRY_TTL
-                await session.execute(
-                    delete(LocationEntry).where(LocationEntry.timestamp < threshold)
-                )
-                await session.commit()
-        except Exception as e:
-            print(f"[CLEANUP ERROR] {e}")
-        await asyncio.sleep(LOCATION_CLEANUP_TTL)
+    # shutdown: здесь можно добавить логику остановки (если нужно)
+
+app = FastAPI(lifespan=lifespan)
+
+#app.add_middleware(HTTPSRedirectMiddleware)
+app.include_router(router)
