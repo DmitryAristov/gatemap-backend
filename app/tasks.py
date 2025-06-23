@@ -9,6 +9,7 @@ from app.settings import LOCATION_ENTRY_TTL, QUEUE_REPORT_TTL, CLEANUP_INTERVAL,
 from collections import defaultdict
 import logging
 
+
 logger = logging.getLogger(__name__)
 
 

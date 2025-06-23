@@ -2,7 +2,7 @@ from datetime import datetime, timezone
 import uuid
 from sqlalchemy import (
     Column, String, Integer, Float, DateTime, Boolean,
-    ForeignKey, UniqueConstraint
+    ForeignKey, UniqueConstraint, Text
 )
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import declarative_base, relationship
@@ -43,6 +43,10 @@ class QueueReport(Base):
     # Relationships
     checkpoint = relationship("Checkpoint", back_populates="reports")
 
+    __table_args__ = (
+        UniqueConstraint('device_id', 'checkpoint_id', name='uix_queue_device_checkpoint'),
+    )
+
 
 class LocationPing(Base):
     __tablename__ = "location_pings"
@@ -62,7 +66,7 @@ class Feedback(Base):
     message = Column(String, nullable=False)
     tag = Column(String, nullable=False)  # 'Ошибка' / 'Идея' / 'Другое'
     email = Column(String, nullable=True)
-    include_logs = Column(Boolean, nullable=False, default=False)
+    logs = Column(Text, nullable=True)
     submitted_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc))
 
 

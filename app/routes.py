@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Query, Depends, HTTPException, status
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy.exc import IntegrityError, DataError
 from sqlalchemy import select, func
 from app.db import async_session
 from app.models import LocationPing, Checkpoint, QueueReport, Feedback, Proposal, ProposalVote
@@ -15,7 +16,7 @@ import uuid
 router = APIRouter()
 
 
-@router.get("/checkpoints/", response_model=list[CheckpointOut])
+@router.get("/checkpoints", response_model=list[CheckpointOut])
 async def get_checkpoints_in_bbox(
     min_lat: float = Query(..., description="Минимальная широта"),
     max_lat: float = Query(..., description="Максимальная широта"),
@@ -55,7 +56,10 @@ async def get_checkpoint_by_id(checkpoint_id: int, db: AsyncSession = Depends(as
     cp = result.scalar_one_or_none()
 
     if cp is None:
-        raise HTTPException(status_code=404, detail="Checkpoint not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Checkpoint with id {checkpoint_id} not found"
+        )
 
     return CheckpointOut(
         id=cp.id,
@@ -78,13 +82,16 @@ async def save_location(
     stmt = select(Checkpoint.id).where(Checkpoint.id == data.checkpoint_id)
     result = await session.execute(stmt)
     if result.scalar() is None:
-        raise HTTPException(status_code=404, detail="Checkpoint not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Checkpoint with id {data.checkpoint_id} not found"
+        )
 
     new_entry = LocationPing(
         id=str(uuid.uuid4()),
         device_id=data.device_id,
-        latitude=data.latitude,
-        longitude=data.longitude,
+        lat=data.latitude,
+        lon=data.longitude,
         checkpoint_id=data.checkpoint_id,
         timestamp=datetime.now(timezone.utc)
     )
@@ -111,13 +118,9 @@ async def submit_queue_report(
             detail=f"Checkpoint with id {report.checkpoint_id} not found"
         )
 
-    if not (0 <= report.waiting_time_hours <= 12):
-        raise HTTPException(status_code=400, detail="Invalid waiting time")
-    if not (0 <= report.throughput_vehicles_per_hour <= 1000):
-        raise HTTPException(status_code=400, detail="Invalid throughput")
-
     submitted_at = datetime.now(timezone.utc)
-    new_entry = QueueReport(
+
+    stmt = pg_insert(QueueReport).values(
         id=str(uuid.uuid4()),
         checkpoint_id=report.checkpoint_id,
         lat=report.lat,
@@ -126,22 +129,31 @@ async def submit_queue_report(
         throughput_vehicles_per_hour=report.throughput_vehicles_per_hour,
         device_id=report.device_id,
         submitted_at=submitted_at
+    ).on_conflict_do_update(
+        index_elements=["device_id", "checkpoint_id"],
+        set_={
+            "lat": report.lat,
+            "lon": report.lon,
+            "waiting_time_hours": report.waiting_time_hours,
+            "throughput_vehicles_per_hour": report.throughput_vehicles_per_hour,
+            "submitted_at": submitted_at
+        }
     )
 
-    session.add(new_entry)
+    await session.execute(stmt)
     await session.commit()
 
     return QueueReportOut(submitted_at=submitted_at)
 
 
-@router.post("/feedback/")
+@router.post("/feedback")
 async def submit_feedback(data: FeedbackCreate, db: AsyncSession = Depends(async_session)):
     new_feedback = Feedback(
         id=uuid.uuid4(),
         message=data.message,
         tag=data.tag,
         email=data.email,
-        include_logs=data.include_logs,
+        logs=data.logs,
         submitted_at=datetime.now(timezone.utc)
     )
     db.add(new_feedback)
@@ -149,7 +161,7 @@ async def submit_feedback(data: FeedbackCreate, db: AsyncSession = Depends(async
     return {"status": "ok"}
 
 
-@router.get("/proposals/", response_model=list[ProposalOut])
+@router.get("/proposals", response_model=list[ProposalOut])
 async def get_proposals(db: AsyncSession = Depends(async_session)):
     stmt = select(Proposal)
     result = await db.execute(stmt)
@@ -194,6 +206,11 @@ async def vote_proposal(
     except IntegrityError:
         await db.rollback()
         raise HTTPException(status_code=400, detail="You have already voted for this proposal.")
+    except DataError:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Proposal with id {proposal_id} not found"
+        )
 
     stmt = select(
         func.count().filter(ProposalVote.vote == True),

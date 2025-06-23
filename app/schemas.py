@@ -6,7 +6,7 @@ class LocationData(BaseModel):
     device_id: str = Field(..., max_length=64)
     latitude: float = Field(..., ge=-90, le=90)
     longitude: float = Field(..., ge=-180, le=180)
-    checkpoint_id: str
+    checkpoint_id: int
 
 
 class CheckpointOut(BaseModel):
@@ -21,7 +21,7 @@ class CheckpointOut(BaseModel):
 
 
 class QueueReportCreate(BaseModel):
-    checkpoint_id: str
+    checkpoint_id: int
     lat: float
     lon: float
     waiting_time_hours: float
@@ -46,7 +46,7 @@ class FeedbackCreate(BaseModel):
     message: str
     tag: str
     email: EmailStr | None = None
-    include_logs: bool = False
+    logs: str
 
 
 class ProposalVoteCreate(BaseModel):

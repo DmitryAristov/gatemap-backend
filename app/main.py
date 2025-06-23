@@ -1,3 +1,4 @@
+import sys
 import asyncio
 from fastapi import FastAPI
 from app.routes import router
@@ -10,13 +11,19 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+        handlers=[logging.StreamHandler(sys.stdout)],
+    )
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     try:
         run_migrations()
     except Exception as e:
-        logger.exception("Failed to apply Alembic migrations")
+        logger.exception("Failed to apply Alembic migrations: %s", e)
         raise
     asyncio.create_task(cleanup_old_data())
     asyncio.create_task(update_checkpoint_stats())
@@ -27,9 +34,8 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(lifespan=lifespan)
 
-#app.add_middleware(HTTPSRedirectMiddleware)
+app.add_middleware(HTTPSRedirectMiddleware)
 app.include_router(router)
-
 
 def run_migrations():
     alembic_cfg = Config("alembic.ini")
