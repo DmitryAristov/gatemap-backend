@@ -186,7 +186,7 @@
       same "printed page" as the copyright notice for easier
       identification within third-party archives.
 
-   Copyright [yyyy] [name of copyright owner]
+   Copyright [2025] [Dmitriy Aristov]
 
    Licensed under the Apache License, Version 2.0 (the "License");
    you may not use this file except in compliance with the License.
@@ -199,3 +199,21 @@
    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
    See the License for the specific language governing permissions and
    limitations under the License.
+
+  ============================================================
+  
+  Commons Clause
+  Version 1.0
+  
+  The following condition is added to the License:
+  
+  The grant of rights under the License will not include, and the License
+  does not grant to you the right to Sell the Software.
+  
+  For purposes of this clause, "Sell" means practicing any or all of the
+  rights granted to you under the License to provide to third parties,
+  for a fee or other consideration, a product or service whose value
+  derives, entirely or substantially, from the functionality of the Software.
+  
+  Any license notice or attribution required by the License must also
+  include this Commons Clause License Condition notice.
